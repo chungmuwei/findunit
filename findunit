@@ -1,0 +1,87 @@
+#!/usr/local/bin/python3.10
+
+from bs4 import BeautifulSoup
+import lxml
+import requests
+import sys
+from datetime import date
+
+
+### Web Scraping ###
+def get_unit_outline_urls(unit_code: str, year: int, is_on_campus = True) -> list:
+	"""
+	Reuturn the unit outline url matching the given year and mode if exists, otherwise, return None
+	"""
+
+	# 1. set div id to current or archived
+	div_id = "currentOutlines" # id of the div label containing the list of outline urls
+	if year != date.today().year:
+		div_id = "archivedOutlines"
+	
+	mode = "CC"
+	if not is_on_campus:
+		mode = "RE"
+	
+	# 2. request the unit url
+	unit_url = f"https://www.sydney.edu.au/units/{unit_code}"
+	unit_html = requests.get(unit_url).text
+	unit_soup = BeautifulSoup(unit_html, 'lxml')
+	
+	# 3. find the outlines
+	try:
+		outlines = unit_soup.find("div", id = div_id).ul.findAll("li")
+	except AttributeError:
+		print(f"Unit code: {unit_code} not found")
+		exit(2)
+	
+	# 4. find the unit outline url matching the given year and mode
+	for outline in outlines:
+		if outline.a != None:
+			outline_url = outline.a["href"]
+			if str(year) in outline_url and mode in outline_url:
+				return "https://www.sydney.edu.au" + outline_url
+	return None
+
+def get_unit_outline_overview(unit_outline_url: str) -> str:
+	"""
+	Return a string of the overview of the unit
+	"""
+
+	unit_outline_html = requests.get(unit_outline_url).text
+	unit_outline_soup = BeautifulSoup(unit_outline_html, 'lxml')
+
+	overview = unit_outline_soup.find("div", {"id": "uniqueId_uos_overview_panel"}).div.div.div.p.text
+	return overview
+
+### Printing Information ###
+def print_unit_outline_overview(unit_outline_url):
+	print(f"\nSource: {unit_outline_url}")
+	print("\nOverview:")
+	print(get_unit_outline_overview(unit_outline_url))
+	print("\n(END)\n")
+
+### Driver ###
+def run():
+	if len(sys.argv) < 2:
+		print("Usage: findunit unit_code [-y year] [-m mode]")
+		exit(1)
+	unit_code = sys.argv[1]
+	year = date.today().year
+	is_on_campus = True
+	if len(sys.argv) >= 4:
+		if sys.argv[2] == "-y":
+			year = sys.argv[3]
+	if len(sys.argv) >= 6:
+		if sys.argv[4] == "-m" and sys.argv[5] == "RE":
+			is_on_campus = False
+	
+	outline_url = get_unit_outline_urls(unit_code, year, is_on_campus)
+	if outline_url == None:
+		print(f"{year} outline not found")
+		exit(2)
+	print_unit_outline_overview(outline_url)
+
+
+if __name__ == "__main__":
+	run()
+		
