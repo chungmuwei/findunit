@@ -1,14 +1,14 @@
-#!/usr/local/bin/python3.10
-
+#!/usr/bin/env python3
+from operator import inv
 from bs4 import BeautifulSoup
 import lxml
 import requests
 import sys
 from datetime import date
-
+import argparse
 
 ### Web Scraping ###
-def get_unit_outline_urls(unit_code: str, year: int, is_on_campus = True) -> list:
+def get_unit_outline_urls(unit_code: str, year: int, mode: str) -> list:
 	"""
 	Reuturn the unit outline url matching the given year and mode if exists, otherwise, return None
 	"""
@@ -18,16 +18,13 @@ def get_unit_outline_urls(unit_code: str, year: int, is_on_campus = True) -> lis
 	if year != date.today().year:
 		div_id = "archivedOutlines"
 	
-	mode = "CC"
-	if not is_on_campus:
-		mode = "RE"
-	
 	# 2. request the unit url
 	unit_url = f"https://www.sydney.edu.au/units/{unit_code}"
 	unit_html = requests.get(unit_url).text
 	unit_soup = BeautifulSoup(unit_html, 'lxml')
 	
 	# 3. find the outlines
+	# 3.1 unit code not found
 	try:
 		outlines = unit_soup.find("div", id = div_id).ul.findAll("li")
 	except AttributeError:
@@ -40,7 +37,9 @@ def get_unit_outline_urls(unit_code: str, year: int, is_on_campus = True) -> lis
 			outline_url = outline.a["href"]
 			if str(year) in outline_url and mode in outline_url:
 				return "https://www.sydney.edu.au" + outline_url
-	return None
+	# 4.1 year not found
+	print(f"Year: {year} not found")
+	exit(2)
 
 def get_unit_outline_overview(unit_outline_url: str) -> str:
 	"""
@@ -54,32 +53,55 @@ def get_unit_outline_overview(unit_outline_url: str) -> str:
 	return overview
 
 ### Printing Information ###
-def print_unit_outline_overview(unit_outline_url):
-	print(f"\nSource: {unit_outline_url}")
-	print("\nOverview:")
+def print_unit_outline_overview(unit_code, unit_outline_url):
+	print(f"\n{unit_code} Overview:")
 	print(get_unit_outline_overview(unit_outline_url))
+	print(f"\nSource: {unit_outline_url}")
 	print("\n(END)\n")
+
+### Checking Arguments ###
+
+def valid_unitcode(string: str) -> bool:
+	"""
+	Check if the input string satisfies the structure of the unit code of the University of Sydney
+	A valid unit code consists of 8 characters. The first 4 are alphabets and the last 4 are numbers.
+	"""
+	return len(string) == 8 and string[:4].isalpha() and string[4:].isnumeric()
 
 ### Driver ###
 def run():
-	if len(sys.argv) < 2:
-		print("Usage: findunit unit_code [-y year] [-m mode]")
-		exit(1)
-	unit_code = sys.argv[1]
-	year = date.today().year
-	is_on_campus = True
-	if len(sys.argv) >= 4:
-		if sys.argv[2] == "-y":
-			year = sys.argv[3]
-	if len(sys.argv) >= 6:
-		if sys.argv[4] == "-m" and sys.argv[5] == "RE":
-			is_on_campus = False
+	# 1. parse arguments
+	parser = argparse.ArgumentParser(description='Print the overview of an unit of study at the University of Sydney')
+	parser.add_argument('unitcode', type=str.upper, nargs='+', help='the unit code to find')
+	parser.add_argument('-y', '--year', type=int, default=date.today().year, help='the year of the unit of study')
+	parser.add_argument('-m', '--mode', type=str.upper, choices=["CC", "RE"], default="CC", help='the mode of the unit study')
+	args = parser.parse_args()
 	
-	outline_url = get_unit_outline_urls(unit_code, year, is_on_campus)
-	if outline_url == None:
-		print(f"{year} outline not found")
+	print(args)
+
+	unit_code_ls = args.unitcode
+	year = args.year
+	mode = args.mode
+	
+	invalid_unit_code_ls = []
+
+	# Iterate over all unit outine urls
+	for unit_code in unit_code_ls:
+		# append invalid unit code to the list
+		if not valid_unitcode(unit_code):
+			invalid_unit_code_ls.append(unit_code)
+		# find unit outline url
+		outline_url = get_unit_outline_urls(unit_code, year, mode)
+		# print unit overview
+		print_unit_outline_overview(unit_code, outline_url)
+
+	# Print error message for invalid unit code
+	if len(invalid_unit_code_ls) > 0:
+		print(f"Invalid unit code: {invalid_unit_code_ls}")
+		print()
+		print("A valid unit code consists of 8 characters.")
+		print("The first 4 are alphabets and the last 4 are numbers.")
 		exit(2)
-	print_unit_outline_overview(outline_url)
 
 
 if __name__ == "__main__":

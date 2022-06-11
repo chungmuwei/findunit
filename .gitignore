@@ -1,0 +1,4 @@
+# ignore all pdf
+*.pdf
+# ignore all txt
+*.txt
