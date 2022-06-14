@@ -2,3 +2,6 @@
 *.pdf
 # ignore all txt
 *.txt
+# ignore
+.vscode
+__pycache__

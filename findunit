@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-from operator import inv
+
 from bs4 import BeautifulSoup
-import lxml
 import requests
-import sys
 from datetime import date
 import argparse
 
+from unit import unit
+
 ### Web Scraping ###
-def get_unit_outline_urls(unit_code: str, year: int, mode: str) -> list:
+def get_unit_outline_url(unit_code: str, year: int, is_remote: bool) -> list:
 	"""
 	Reuturn the unit outline url matching the given year and mode if exists, otherwise, return None
 	"""
@@ -33,10 +33,14 @@ def get_unit_outline_urls(unit_code: str, year: int, mode: str) -> list:
 	
 	# 4. find the unit outline url matching the given year and mode
 	for outline in outlines:
-		if outline.a != None:
-			outline_url = outline.a["href"]
-			if str(year) in outline_url and mode in outline_url:
-				return "https://www.sydney.edu.au" + outline_url
+		if outline.a == None:						# no a tag
+			continue
+		outline_url = outline.a["href"]
+		if str(year) not in outline_url:			# year not match
+			continue
+		if (is_remote and "RE" in outline_url) or\
+		(not is_remote and "RE" not in outline_url):	# correct mode
+			return "https://www.sydney.edu.au" + outline_url
 	# 4.1 year not found
 	print(f"Year: {year} not found")
 	exit(2)
@@ -52,8 +56,36 @@ def get_unit_outline_overview(unit_outline_url: str) -> str:
 	overview = unit_outline_soup.find("div", {"id": "uniqueId_uos_overview_panel"}).div.div.div.p.text
 	return overview
 
+def create_unit_object(unit_outline_url: str, unit_code: str) -> unit:
+	"""
+	Create unit object to store information about the unit
+	
+	Parameters:
+		unit_outline_url: unit outline url string 
+		unit_code: unit code string
+	Returns:
+		unit object corresponds to the unit outline
+	"""
+
+	unit_outline_html = requests.get(unit_outline_url).text
+	unit_outline_soup = BeautifulSoup(unit_outline_html, 'lxml')
+
+	overview = unit_outline_soup.find("div", {"id": "uniqueId_uos_overview_panel"}).div.div.div.p.text
+	name = unit_outline_soup.find("h1", {"class": "pageTitle b-student-site__section-title"}).text.split(": ")[1]
+	credit_point = int(unit_outline_soup.find("div", {"id": "academicDetails"}).table.tbody.findAll("tr")[-1].td.text)
+
+	my_unit = unit(unit_outline_url, unit_code, name, credit_point, overview)
+	
+	# add information about enrolment rules
+	enrolment_rules = unit_outline_soup.find("div", {"id": "enrolmentRules"}).table.tbody.findAll("tr")
+	my_unit.set_prohibitions(enrolment_rules[0].td.text)
+	my_unit.set_prerequisites(enrolment_rules[1].td.text)
+	my_unit.set_corequisites(enrolment_rules[2].td.text)
+
+	return my_unit
+
 ### Printing Information ###
-def print_unit_outline_overview(unit_code, unit_outline_url):
+def print_unit_outline_overview(unit_outline_url, unit_code):
 	print(f"\n{unit_code} Overview:")
 	print(get_unit_outline_overview(unit_outline_url))
 	print(f"\nSource: {unit_outline_url}")
@@ -74,26 +106,31 @@ def run():
 	parser = argparse.ArgumentParser(description='Print the overview of an unit of study at the University of Sydney')
 	parser.add_argument('unitcode', type=str.upper, nargs='+', help='the unit code to find')
 	parser.add_argument('-y', '--year', type=int, default=date.today().year, help='the year of the unit of study')
-	parser.add_argument('-m', '--mode', type=str.upper, choices=["CC", "RE"], default="CC", help='the mode of the unit study')
+	parser.add_argument('-r', '--remote', action='store_true' ,help='remote/online delivery mode')
 	args = parser.parse_args()
 	
-	print(args)
+	# print(args)
 
 	unit_code_ls = args.unitcode
 	year = args.year
-	mode = args.mode
+	is_remote = args.remote
 	
 	invalid_unit_code_ls = []
 
-	# Iterate over all unit outine urls
+	# 2. Iterate over all unit outine urls
 	for unit_code in unit_code_ls:
 		# append invalid unit code to the list
 		if not valid_unitcode(unit_code):
 			invalid_unit_code_ls.append(unit_code)
+
 		# find unit outline url
-		outline_url = get_unit_outline_urls(unit_code, year, mode)
-		# print unit overview
-		print_unit_outline_overview(unit_code, outline_url)
+		outline_url = get_unit_outline_url(unit_code, year, is_remote)
+		
+		# create unit object
+		my_unit = create_unit_object(outline_url, unit_code)
+
+		# print unit infomation
+		print(my_unit)
 
 	# Print error message for invalid unit code
 	if len(invalid_unit_code_ls) > 0:
