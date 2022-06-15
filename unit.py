@@ -58,6 +58,21 @@ Overview:
 Source: {self.__url}
 
 """
+    def markdown(self) -> str:
+        return f"""# [{self.code()}: {self.name()}]({self.__url})
+
+- Credit point: {self.credit_point()}
+- Prohibition: {self.__prohibitions}
+- Prerequisite: {self.__prerequisites}
+- Corequisite: {self.__corequisites}
+
+## Overview:
+
+{self.overview()}
+
+---
+
+"""
     
 if __name__ == "__main__":
     comp2022 = unit("comp2022")
