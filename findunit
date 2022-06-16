@@ -1,118 +1,9 @@
 #!/usr/bin/env python3
 
-import sys
-from bs4 import BeautifulSoup
-import requests
-from datetime import date, datetime
-import argparse
-import os
-
-from unit import unit
-
-### Web Scraping ###
-def get_unit_outline_url(unit_code: str, year: int, is_remote: bool) -> list:
-	"""
-	Reuturn the unit outline url matching the given year and mode if exists, otherwise, return None
-	"""
-
-	# 1. set div id to current or archived
-	div_id = "currentOutlines" # id of the div label containing the list of outline urls
-	if year != date.today().year:
-		div_id = "archivedOutlines"
-	
-	# 2. request the unit url
-	unit_url = f"https://www.sydney.edu.au/units/{unit_code}"
-	unit_html = requests.get(unit_url).text
-	unit_soup = BeautifulSoup(unit_html, 'lxml')
-	
-	# 3. find the outlines
-	# 3.1 unit code not found
-	try:
-		outlines = unit_soup.find("div", id = div_id).ul.findAll("li")
-	except AttributeError:
-		print(f"Unit code: {unit_code} not found")
-		exit(2)
-	
-	# 4. find the unit outline url matching the given year and mode
-	for outline in outlines:
-		if outline.a == None:						# no a tag
-			continue
-		outline_url = outline.a["href"]
-		if str(year) not in outline_url:			# year not match
-			continue
-		if (is_remote and "RE" in outline_url) or\
-		(not is_remote and "RE" not in outline_url):	# correct mode
-			return "https://www.sydney.edu.au" + outline_url
-	# 4.1 year not found
-	print(f"{unit_code}: {year} outline not found")
-	return None
-
-def get_unit_outline_overview(unit_outline_url: str) -> str:
-	"""
-	Return a string of the overview of the unit
-	"""
-
-	unit_outline_html = requests.get(unit_outline_url).text
-	unit_outline_soup = BeautifulSoup(unit_outline_html, 'lxml')
-
-	overview = unit_outline_soup.find("div", {"id": "uniqueId_uos_overview_panel"}).div.div.div.p.text
-	return overview
-
-def create_unit_object(unit_outline_url: str, unit_code: str) -> unit:
-	"""
-	Create unit object to store information about the unit
-
-	Parameters:
-		unit_outline_url: unit outline url string 
-		unit_code: unit code string
-	Returns:
-		unit object corresponds to the unit outline
-	"""
-
-	unit_outline_html = requests.get(unit_outline_url).text
-	unit_outline_soup = BeautifulSoup(unit_outline_html, 'lxml')
-
-	overview = unit_outline_soup.find("div", {"id": "uniqueId_uos_overview_panel"}).div.div.div.p.text
-	name = unit_outline_soup.find("h1", {"class": "pageTitle b-student-site__section-title"}).text.split(": ")[1]
-	credit_point = int(unit_outline_soup.find("div", {"id": "academicDetails"}).table.tbody.findAll("tr")[-1].td.text)
-
-	my_unit = unit(unit_outline_url, unit_code, name, credit_point, overview)
-	
-	# add information about enrolment rules
-	enrolment_rules = unit_outline_soup.find("div", {"id": "enrolmentRules"}).table.tbody.findAll("tr")
-	my_unit.set_prohibitions(enrolment_rules[0].td.text)
-	my_unit.set_prerequisites(enrolment_rules[1].td.text)
-	my_unit.set_corequisites(enrolment_rules[2].td.text)
-
-	return my_unit
-
-############################
-### Printing Information ###
-############################
-
-def print_unit_outline_overview(unit_outline_url, unit_code):
-	print(f"\n{unit_code} Overview:")
-	print(get_unit_outline_overview(unit_outline_url))
-	print(f"\nSource: {unit_outline_url}")
-	print("\n(END)\n")
-
-##########################
-### Checking Arguments ###
-##########################
-
-def valid_unitcode(string: str) -> bool:
-	"""
-	Check if the input string satisfies the structure of the unit code of the University of Sydney
-	A valid unit code consists of 8 characters. The first 4 are alphabets and the last 4 are numbers.
-	"""
-	return len(string) == 8 and string[:4].isalpha() and string[4:].isnumeric()
-
-def valid_filename(filename: str) -> bool:
-	"""
-	Check if the input file name is valid
-	"""
-	extention = filename.split(".")[-1]
-	return extention == "txt" or extention == "md" or extention == "pdf"
+import sys, os
+from args import *
+from unit import *
+from crawl import *
 
 ##############
 ### Driver ###
@@ -120,15 +11,10 @@ def valid_filename(filename: str) -> bool:
 
 def run():
 	# 1. parse arguments
-	parser = argparse.ArgumentParser(description='Print the overview of an unit of study at the University of Sydney')
-	parser.add_argument('unitcode', type=str.upper, nargs='+', help='the unit code to find')
-	parser.add_argument('-y', '--year', type=int, default=date.today().year, help='the year of the unit of study')
-	parser.add_argument('-r', '--remote', action='store_true', help='remote/online delivery mode')
-	parser.add_argument('-o', '--output', type=str, help='the output file name (supported format: text, markdown, pdf)')
-	args = parser.parse_args()
-	
-	# print(args)
+	args = get_args()
+	print(args)
 
+	# 2. assign variables
 	unit_code_ls = args.unitcode
 	year = args.year
 	is_remote = args.remote
@@ -178,13 +64,13 @@ def run():
 				else:
 					f.write(my_unit.markdown())
 
-	# Convert markdown to pdf using pandoc 
+	# 4. Convert markdown to pdf using pandoc 
 	if output_file_extention == "pdf":
 		os.system(f"pandoc {os.getcwd()}/{output_file_base}.md -o {os.getcwd()}/{output_filename}")
 
 
 
-	# Print error message for invalid unit code
+	# 5. Print error message for invalid unit code
 	if len(invalid_unit_code_ls) > 0:
 		print(f"Invalid unit code: {invalid_unit_code_ls}")
 		print()
