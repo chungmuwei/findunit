@@ -2,10 +2,11 @@
 
 ## Introduction
 
-A python CLI tool to find information about the units of study provided by University of Sydney.
-This tool is under initial development. The current functionality is gather the academic details, 
-enrolment requirements, and overview of the units, then print them to standard output or write to 
-a text, mardown, or pdf file.
+A python **CLI tool** to find information about the units of study at University of Sydney.
+This tool is under initial development. The current functionality is scraping the **overview** 
+section of the units outline, which contains **academic details**, **enrolment rules**, and 
+**teaching staff and contact details**. There are two option of output. One is printing to 
+standard output, and the other one is writing to a file of **text**, **Markdown**, or **PDF** format.
 
 ## Manual
 

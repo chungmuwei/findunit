@@ -12,7 +12,7 @@ from crawl import *
 def run():
 	# 1. parse arguments
 	args = get_args()
-	print(args)
+	# print(args)
 
 	# 2. assign variables
 	unit_code_ls = args.unitcode

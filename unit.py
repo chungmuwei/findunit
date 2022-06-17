@@ -2,6 +2,7 @@
 Include the definition of class unit and function relating to unit objects
 '''
 
+from operator import contains
 import requests
 from bs4 import BeautifulSoup
 
@@ -12,87 +13,98 @@ class unit:
     '''
 
     __url: str
-    __name: str
-    __code: str
-    __credit_point: int
 
-    __prohibitions: str
-    __prerequisites: str
-    __corequisites: str
-    # __assumed_knowledge: str
-
-    __coordinator: str
-    __email: str
+    __academic_details: dict
+    __enrolment_rules: dict
+    __teaching_contacts: dict
 
     __overview: str
 
-    def __init__(self, url, code, name, credit_point, overview) -> None:
+    def __init__(self, url) -> None:
         self.__url = url
-        self.__code = code
-        self.__name = name
-        self.__credit_point = credit_point
+
+    def set_overview(self, overview) -> None:
         self.__overview = overview
     
-    def code(self) -> str:
-        return self.__code
-    
-    def name(self) -> str:
-        return self.__name
-    
-    def overview(self) -> str:
-        return self.__overview
-    
-    def credit_point(self) -> int:
-        return self.__credit_point
-    
-    def set_prohibitions(self, prohibitions: str) -> None:
-        self.__prohibitions = prohibitions
-    
-    def set_prerequisites(self, prerequisites: str) -> None:
-        self.__prerequisites = prerequisites
-    
-    def set_corequisites(self, corequisites: str) -> None:
-        self.__corequisites = corequisites
-    
-    # def set_assumed_knowledge(self, assumed_knowledge: str) -> None:
-    #     self.__assumed_knowledge = assumed_knowledge
+    def set_academic_details(self, academic_details: dict) -> None:
+        self.__academic_details = academic_details
 
-    def set_coordinator(self, coordinator: str) -> None:
-        self.__coordinator = coordinator
-    
-    def set_email(self, email: str) -> None:
-        self.__email = email
+    def set_enrolment_rules(self, enrolment_rules: dict) -> None:
+        self.__enrolment_rules = enrolment_rules
 
-    def __str__(self) -> str:
-        return f"""{self.code()}: {self.name()}
-Credit point:       |   {self.credit_point()}
-Prohibition:        |   {self.__prohibitions}
-Prerequisite:       |   {self.__prerequisites}
-Corequisite:        |   {self.__corequisites}
-Coordinator:        |   {self.__coordinator}, {self.__email}
+    def set_teaching_contacts(self, teaching_contacts: dict) -> None:
+        self.__teaching_contacts = teaching_contacts
 
-Overview:
-{self.overview()}
+    def __str__(self):
+        """
+        Return the unit outline in plain text
+        """
 
-Source: {self.__url}
+        ret = ""
 
-"""
+        ad = self.__academic_details
+        ret += f"{ad['Unit code']}: {ad['Unit name']}\n\n"
+
+        ret += f"Overview:\n{self.__overview}\n\n"
+
+        ret += "Academic details:\n"
+        for k, v in self.__academic_details.items():
+            ret += "{:<20s}  |   {:s}\n".format(k, v)
+        ret += "\n"
+
+        ret += "Enrolment rules:\n"
+        for k, v in self.__enrolment_rules.items():
+            ret += "{:<20s}  |   {:s}\n".format(k, v)
+        ret += "\n"
+
+        ret += "Teaching staff and contact details:\n"
+        for k, v in self.__teaching_contacts.items():
+            ret += "{:<20s}  |   {:s}\n".format(k, v)
+        ret += "\n"
+
+        ret += f"Source: {self.__url}\n"
+
+        ret += "="*80
+        ret += "\n"
+
+        return ret
+
     def markdown(self) -> str:
-        return f"""# [{self.code()}: {self.name()}]({self.__url})
+        """
+        Return the unit outline in markdown format
+        """
 
-- Credit point: {self.credit_point()}
-- Prohibition: {self.__prohibitions}
-- Prerequisite: {self.__prerequisites}
-- Corequisite: {self.__corequisites}
-- Coordinator: {self.__coordinator} [{self.__email}]({self.__email})
+        ret = ""
 
-## Overview:
+        ad = self.__academic_details
+        ret += f"# [{ad['Unit code']}: {ad['Unit name']}]({self.__url})\n\n"
 
-{self.overview()}
+        ret += f"## Overview\n{self.__overview}\n\n"
 
----
+        ret += "## Academic details\n"
+        for k, v in self.__academic_details.items():
+            ret += f"- {k}: {v}\n"
+        ret += "\n"
 
-"""
+        ret += "## Enrolment rules\n"
+        for k, v in self.__enrolment_rules.items():
+            ret += f"- {k}: {v}\n"
+        ret += "\n"
+
+        ret += "## Teaching staff and contact details\n"
+        for k, v in self.__teaching_contacts.items():
+            if (k != "Administrative staff"):
+                tmp = v.split(',')
+                tmp[0] = tmp[0].strip()
+                tmp[1] = tmp[1].strip()
+                tmp[1] = f"[{tmp[1]}](mailto:{tmp[1]})"
+                v = ', '.join(tmp)
+            ret += f"- {k}: {v}\n"
+        ret += "\n"
+        ret += "---"
+        ret += "\n"
+
+        return ret
 
 
 def create_unit_object(unit_outline_url: str, unit_code: str) -> unit:
@@ -109,21 +121,42 @@ def create_unit_object(unit_outline_url: str, unit_code: str) -> unit:
     unit_outline_html = requests.get(unit_outline_url).text
     unit_outline_soup = BeautifulSoup(unit_outline_html, 'lxml')
 
-    overview = unit_outline_soup.find("div", {"id": "uniqueId_uos_overview_panel"}).div.div.div.p.text
-    name = unit_outline_soup.find("h1", {"class": "pageTitle b-student-site__section-title"}).text.split(": ")[1]
-    credit_point = int(unit_outline_soup.find("div", {"id": "academicDetails"}).table.tbody.findAll("tr")[-1].td.text)
+    my_unit = unit(unit_outline_url)
+    
 
-    my_unit = unit(unit_outline_url, unit_code, name, credit_point, overview)
-
-    # add enrolment rules
+    # scraping academic details and store in a dictionary
+    academic_details = unit_outline_soup.find("div", {"id": "academicDetails"}).table.tbody.findAll("tr")
+    details = dict()
+    for i in range(len(academic_details)):
+        key = ' '.join(academic_details[i].th.text.split()).replace(' ?', '')
+        value = academic_details[i].td.text
+        details[key] = value
+    my_unit.set_academic_details(details)
+    
+    # scraping enrolment rules and store in a dictionary
     enrolment_rules = unit_outline_soup.find("div", {"id": "enrolmentRules"}).table.tbody.findAll("tr")
-    my_unit.set_prohibitions(enrolment_rules[0].td.text)
-    my_unit.set_prerequisites(enrolment_rules[1].td.text)
-    my_unit.set_corequisites(enrolment_rules[2].td.text)
+    rules = dict()
+    for i in range(len(enrolment_rules)):
+        key = ' '.join(enrolment_rules[i].th.text.split()).replace('?', '')
+        value = enrolment_rules[i].td.text
+        rules[key] = value
+    my_unit.set_enrolment_rules(rules)
 
-    # add teaching staffs
-    t = unit_outline_soup.find("div", {"id": "teachingContacts"}).table.tbody.tr.td.findAll("span")
-    my_unit.set_coordinator(t[0].text.strip()) 
-    my_unit.set_email(t[1].text) 
+    # scraping teaching staff and contact details
+    teaching_contacts = unit_outline_soup.find("div", {"id": "teachingContacts"}).table.tbody.findAll("tr")
+    contacts = dict()
+    for i in range(len(teaching_contacts)):
+        key = teaching_contacts[i].th.text
+        value = ' '.join(teaching_contacts[i].td.text.split())   # remove all whitespace characters
+        contacts[key] = value
+    my_unit.set_teaching_contacts(contacts)
+
+    # scraping overview
+    overview = unit_outline_soup.find("div", {"id": "uniqueId_uos_overview_panel"}).div.div.div.p.text
+    my_unit.set_overview(overview)
 
     return my_unit
+
+if __name__ == "__main__":
+    math1002 = create_unit_object("https://www.sydney.edu.au/units/MATH1002/2022-S1C-ND-CC", "")
+    math1002.print()
