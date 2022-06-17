@@ -102,7 +102,7 @@ class unit:
             ret += f"- {k}: {v}\n"
         ret += "\n"
         ret += "---"
-        ret += "\n"
+        ret += "\n\n"
 
         return ret
 
