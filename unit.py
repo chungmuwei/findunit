@@ -113,7 +113,7 @@ def create_unit_object(unit_outline_url: str, unit_code: str) -> unit:
 
 	Parameters:
 		unit_outline_url: unit outline url string 
-		unit_code: unit code string
+		unit_code: unit of study code string
 	Returns:
 		unit object corresponds to the unit outline
 	"""
@@ -146,6 +146,8 @@ def create_unit_object(unit_outline_url: str, unit_code: str) -> unit:
     teaching_contacts = unit_outline_soup.find("div", {"id": "teachingContacts"}).table.tbody.findAll("tr")
     contacts = dict()
     for i in range(len(teaching_contacts)):
+        if teaching_contacts[i].th == None:
+            continue
         key = teaching_contacts[i].th.text
         value = ' '.join(teaching_contacts[i].td.text.split())   # remove all whitespace characters
         contacts[key] = value

@@ -40,17 +40,40 @@ def run():
 
 	# 3. Iterate over all unit outine urls
 	for unit_code in unit_code_ls:
-		# append invalid unit code to the list
+		# append invalid unit of study code to the list
 		if not valid_unitcode(unit_code):
 			invalid_unit_code_ls.append(unit_code)
 
 		# find unit outline url
-		outline_url = get_unit_outline_url(unit_code, year, is_remote)
-		if outline_url == None:
-			continue
 		
+		outline_url_ls = get_unit_outline_url(unit_code, year, is_remote)
+		
+		# no unit outline found for this unit
+		if len(outline_url_ls) == 0:
+			continue
+		index = -1
+		# more than one unit outlines found ofr this unit
+		if len(outline_url_ls) > 1:
+			print(f"{unit_code} is provided in multiple times in {year}.")
+			for i in range(len(outline_url_ls)):
+				print(f"{i}: {outline_url_ls[i].split('/')[-1]}")
+			### error handling
+			valid_index = False	# flag
+			while not valid_index:
+				try:
+					index = int(input("Please enter the index of the unit outline you want to find: "))
+					if index < 0 or index >= len(outline_url_ls):
+						print("The index is out of range!")
+					else:
+						valid_index = True
+				except ValueError:
+					print("The index must be a non-negative integer!")
+
+
+		
+	
 		# create unit object
-		my_unit = create_unit_object(outline_url, unit_code)
+		my_unit = create_unit_object(outline_url_ls[index], unit_code)
 
 		# Print unit infomation to stdout
 		if output_filename == None:
@@ -70,11 +93,11 @@ def run():
 
 
 
-	# 5. Print error message for invalid unit code
+	# 5. Print error message for invalid unit of study code
 	if len(invalid_unit_code_ls) > 0:
-		print(f"Invalid unit code: {invalid_unit_code_ls}")
+		print(f"Invalid unit of study code: {invalid_unit_code_ls}")
 		print()
-		print("A valid unit code consists of 8 characters.")
+		print("A valid unit of study code consists of 8 characters.")
 		print("The first 4 are alphabets and the last 4 are numbers.")
 		exit(2)
 
